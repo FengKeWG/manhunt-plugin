@@ -1,0 +1,4 @@
+name: ManHunt
+version: '${project.version}'
+main: org.windguest.manhunt.main
+api-version: '1.21'
