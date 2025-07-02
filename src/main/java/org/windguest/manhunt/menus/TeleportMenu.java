@@ -1,0 +1,109 @@
+package org.windguest.manhunt.menus;
+
+import org.bukkit.Bukkit;
+import org.bukkit.Material;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.SkullMeta;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class TeleportMenu {
+
+    private void open(Player player, int pageIndex) {
+        Inventory teleportMenu = Bukkit.createInventory(null, 54, ("传送 - 第 " + (pageIndex + 1) + " 页"));
+        ItemStack previousPage = new ItemStack(Material.ARROW);
+        ItemMeta previousPageMeta = previousPage.getItemMeta();
+        if (previousPageMeta != null) {
+            previousPageMeta.setDisplayName("§e上一页");
+            previousPage.setItemMeta(previousPageMeta);
+        }
+        teleportMenu.setItem(48, previousPage);
+        ItemStack closeItem = new ItemStack(Material.BARRIER);
+        ItemMeta closeMeta = closeItem.getItemMeta();
+        if (closeMeta != null) {
+            closeMeta.setDisplayName("§c关闭");
+            closeItem.setItemMeta(closeMeta);
+        }
+        teleportMenu.setItem(49, closeItem);
+        ItemStack nextPage = new ItemStack(Material.ARROW);
+        ItemMeta nextPageMeta = nextPage.getItemMeta();
+        if (nextPageMeta != null) {
+            nextPageMeta.setDisplayName("§e下一页");
+            nextPage.setItemMeta(nextPageMeta);
+        }
+        teleportMenu.setItem(50, nextPage);
+        ItemStack endPortalItem = new ItemStack(Material.END_PORTAL_FRAME);
+        ItemMeta endPortalMeta = endPortalItem.getItemMeta();
+        if (endPortalMeta != null) {
+            endPortalMeta.setDisplayName("§a传送至末地");
+            List<String> endPortalLore = List.of("§7仅在有队友进入过末地后开启");
+            endPortalMeta.setLore(endPortalLore);
+            endPortalItem.setItemMeta(endPortalMeta);
+        }
+        teleportMenu.setItem(45, endPortalItem);
+        ItemStack rulesItem = new ItemStack(Material.CRAFTING_TABLE);
+        ItemMeta rulesMeta = rulesItem.getItemMeta();
+        if (rulesMeta != null) {
+            rulesMeta.setDisplayName("§a游戏规则");
+            rulesItem.setItemMeta(rulesMeta);
+        }
+        teleportMenu.setItem(53, rulesItem);
+        ArrayList<Player> allPlayers = new ArrayList<>();
+        allPlayers.addAll(blue);
+        allPlayers.addAll(red);
+        allPlayers.remove(player);
+        int totalPages = (int) Math.ceil((double) allPlayers.size() / 28.0);
+        if (pageIndex < 0) {
+            pageIndex = 0;
+        }
+        if (pageIndex >= totalPages) {
+            pageIndex = totalPages - 1;
+        }
+        int startIndex = pageIndex * 28;
+        int endIndex = Math.min(startIndex + 28, allPlayers.size());
+        int[] slots = new int[]{10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 28, 29, 30, 31, 32, 33, 34, 37, 38, 39, 40, 41, 42, 43};
+        for (int i = startIndex; i < endIndex; ++i) {
+            Player p = allPlayers.get(i);
+            ItemStack skull = new ItemStack(Material.PLAYER_HEAD);
+            SkullMeta meta = (SkullMeta) skull.getItemMeta();
+            if (meta != null) {
+                String icon = blue.contains(p) ? "§9⚔" : "§c🏹";
+                meta.setDisplayName(icon + " " + p.getName());
+                meta.setOwningPlayer(p);
+                ArrayList<String> lore = new ArrayList<>();
+                lore.add("");
+                if (player.getWorld().equals(p.getWorld())) {
+                    int distance = (int) player.getLocation().distance(p.getLocation());
+                    if (red.contains(p)) {
+                        lore.add("§c" + getWorldName(p.getWorld()) + " [" + p.getLocation().getBlockX() + ", " + p.getLocation().getBlockY() + ", " + p.getLocation().getBlockZ() + "]");
+                        lore.add("§c距离: " + distance + "格");
+                    } else {
+                        lore.add("§9" + getWorldName(p.getWorld()) + " [" + p.getLocation().getBlockX() + ", " + p.getLocation().getBlockY() + ", " + p.getLocation().getBlockZ() + "]");
+                        lore.add("§9距离: " + distance + "格");
+                    }
+                } else {
+                    lore.add("§c" + getWorldName(p.getWorld()));
+                    lore.add("§c不同世界");
+                }
+                if ((blue.contains(p) && blue.contains((player)) || (red.contains(p) && red.contains((player))))) {
+                    lore.add("");
+                    lore.add("§e点击消耗 §f9.5 §c❤");
+                    lore.add("§e传送到他的位置");
+                } else {
+                    lore.add("");
+                    lore.add("§e点击消耗 §f9.5 §c❤");
+                    lore.add("§e传送到他附近100格");
+                }
+                meta.setLore(lore);
+                skull.setItemMeta(meta);
+            }
+            teleportMenu.setItem(slots[i - startIndex], skull);
+        }
+        playerPageIndex.put(player, pageIndex);
+        player.openInventory(teleportMenu);
+    }
+}
