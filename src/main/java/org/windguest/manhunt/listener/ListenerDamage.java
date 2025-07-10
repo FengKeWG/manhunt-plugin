@@ -7,6 +7,7 @@ import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.windguest.manhunt.game.Mode;
 import org.windguest.manhunt.teams.Team;
 import org.windguest.manhunt.teams.TeamsManager;
 import org.windguest.manhunt.utils.Utils;
@@ -55,7 +56,8 @@ public class ListenerDamage implements Listener {
                 }
             }
             if (damage > 0) {
-                victim.getWorld().spawnParticle(Particle.BLOCK, victim.getLocation().add(0.0, 1.0, 0.0), 30, 0.5, 0.5, 0.5, 0.0, Material.RED_WOOL.createBlockData());
+                victim.getWorld().spawnParticle(Particle.BLOCK, victim.getLocation().add(0.0, 1.0, 0.0), 30, 0.5, 0.5,
+                        0.5, 0.0, Material.RED_WOOL.createBlockData());
             }
         }
     }

@@ -52,12 +52,12 @@ public class Utils {
     public static void spawnFireworkAtPlayer(Player player, Color color) {
         Firework firework = player.getWorld().spawn(player.getLocation().add(0.0, 2.0, 0.0), Firework.class);
         FireworkMeta fireworkMeta = firework.getFireworkMeta();
-        fireworkMeta.addEffect(FireworkEffect.builder().withColor(color).with(FireworkEffect.Type.BALL).trail(false).flicker(false).build());
+        fireworkMeta.addEffect(FireworkEffect.builder().withColor(color).with(FireworkEffect.Type.BALL).trail(false)
+                .flicker(false).build());
         fireworkMeta.setPower(0);
         firework.setFireworkMeta(fireworkMeta);
         firework.setMetadata("noDamage", new FixedMetadataValue(plugin, true));
-        Bukkit.getScheduler().runTaskLater(plugin, () ->
-        {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!firework.isDead()) {
                 firework.detonate();
             }
@@ -89,7 +89,8 @@ public class Utils {
         FireworkEffect.Type type = FireworkEffect.Type.values()[rand.nextInt(FireworkEffect.Type.values().length)];
         Color color1 = Color.fromRGB(rand.nextInt(256), rand.nextInt(256), rand.nextInt(256));
         Color color2 = Color.fromRGB(rand.nextInt(256), rand.nextInt(256), rand.nextInt(256));
-        FireworkEffect effect = FireworkEffect.builder().with(type).withColor(color1).withFade(color2).flicker(rand.nextBoolean()).trail(rand.nextBoolean()).build();
+        FireworkEffect effect = FireworkEffect.builder().with(type).withColor(color1).withFade(color2)
+                .flicker(rand.nextBoolean()).trail(rand.nextBoolean()).build();
         fireworkMeta.addEffect(effect);
         fireworkMeta.setPower(1);
         firework.setFireworkMeta(fireworkMeta);
@@ -106,14 +107,15 @@ public class Utils {
 
     private boolean hasCompass(Player player) {
         for (ItemStack item : player.getInventory().getContents()) {
-            if (item == null || item.getType() != Material.COMPASS || !item.getItemMeta().getDisplayName().equals("§a敌人指南针§7（左键或右键点击）"))
+            if (item == null || item.getType() != Material.COMPASS
+                    || !item.getItemMeta().getDisplayName().equals("§a敌人指南针§7（左键或右键点击）"))
                 continue;
             return true;
         }
         return false;
     }
 
-    public void endDown(Player player) {
+    public static void endDown(Player player) {
         player.addPotionEffect(new PotionEffect(PotionEffectType.SLOW_FALLING, 2400, 0));
         BukkitRunnable task = new BukkitRunnable() {
             public void run() {

@@ -31,8 +31,8 @@ public class Teleport {
             return;
         }
         int[][] coordinates = {
-                {redX, redZ},
-                {blueX, blueZ}
+                { redX, redZ },
+                { blueX, blueZ }
         };
         int cubeHeight = 5;
         int cubeSize = 5;
@@ -43,18 +43,31 @@ public class Teleport {
             Location center = new Location(world, x, y, z);
             WorldManager.createHollowGlassCube(center, cubeSize, cubeHeight);
         }
+
+        Team team1 = TeamsManager.getTeams().stream().findFirst().orElse(null);
+        Team team2 = team1 != null ? team1.getOpponent() : null;
+
+        if (team1 == null || team2 == null) {
+            System.out.println("Error: Teams not initialized correctly.");
+            return;
+        }
+
         for (Player player : Bukkit.getOnlinePlayers()) {
             Inventory inventory = player.getInventory();
             inventory.clear();
-            if (blue.contains(player)) {
-                updatePlayerConfig(player, "games");
-                int y = world.getHighestBlockYAt(redX, redZ) - 3;
-                Location teleportLocation = new Location(world, redX, y, redZ);
+            Team playerTeam = TeamsManager.getPlayerTeam(player);
+            if (playerTeam == null)
+                continue;
+
+            // updatePlayerConfig(player, "games");
+
+            if (playerTeam.equals(team1)) {
+                int y = world.getHighestBlockYAt(coordinates[0][0], coordinates[0][1]) - 3;
+                Location teleportLocation = new Location(world, coordinates[0][0], y, coordinates[0][1]);
                 player.teleport(teleportLocation);
-            } else if (red.contains(player)) {
-                updatePlayerConfig(player, "games");
-                int y = world.getHighestBlockYAt(blueX, blueZ) - 3;
-                Location teleportLocation = new Location(world, blueX, y, blueZ);
+            } else if (playerTeam.equals(team2)) {
+                int y = world.getHighestBlockYAt(coordinates[1][0], coordinates[1][1]) - 3;
+                Location teleportLocation = new Location(world, coordinates[1][0], y, coordinates[1][1]);
                 player.teleport(teleportLocation);
             }
         }
@@ -78,16 +91,20 @@ public class Teleport {
                 .ifPresent(randomPlayer -> player.teleport(randomPlayer.getLocation()));
     }
 
-    private void startTeleportCountdown(Player player, Player targetPlayer, int cost) {
+    public static void startTeleportCountdown(Player player, Player targetPlayer, int cost) {
         player.closeInventory();
         new BukkitRunnable() {
             int countdown = 5;
 
             public void run() {
+                if (player.getOpenInventory().getTitle().contains("共享背包")) {
+                    cancel();
+                    return;
+                }
                 ChatColor color;
                 if (countdown <= 0) {
                     teleportPlayer(player, targetPlayer, cost);
-                    player.removeMetadata("teleporting", ManHuntTeam.this);
+                    player.removeMetadata("teleporting", plugin);
                     cancel();
                     return;
                 }
@@ -111,11 +128,12 @@ public class Teleport {
                 targetPlayer.playSound(targetPlayer.getLocation(), Sound.BLOCK_NOTE_BLOCK_BELL, 1.0f, 1.0f);
                 --countdown;
             }
-        }.runTaskTimer(this, 0L, 20L);
+        }.runTaskTimer(plugin, 0L, 20L);
     }
 
-
-    public void teleportPlayer(Player player, Player targetPlayer, int cost) {
+    public static void teleportPlayer(Player player, Player targetPlayer, int cost) {
+        Team playerTeam = TeamsManager.getPlayerTeam(player);
+        Team targetTeam = TeamsManager.getPlayerTeam(targetPlayer);
         double regularHealth = player.getHealth();
         double absorptionHealth = player.getAbsorptionAmount();
         double currentHealth = absorptionHealth + (regularHealth);
@@ -131,22 +149,30 @@ public class Teleport {
             player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f);
             return;
         }
+        if (targetPlayer.getWorld().getEnvironment() == World.Environment.THE_END) {
+            if (!playerTeam.isEndPortalOpened()) {
+                player.sendMessage("§c[❌] 你的队伍还没有进入过末地，你不能传送到末地的敌人！");
+                player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f);
+                return;
+            }
+        }
         Location targetLocation = targetPlayer.getLocation();
         World.Environment targetEnvironment = targetPlayer.getWorld().getEnvironment();
         String locationMessage = null;
-        boolean sameTeam = blue.contains(player) && blue.contains(targetPlayer) || red.contains(player) && red.contains(targetPlayer);
+        boolean sameTeam = TeamsManager.areSameTeam(player, targetPlayer);
         if (sameTeam) {
             locationMessage = "§a[✔] 你已传送到 " + targetPlayer.getName() + " 的位置";
         } else if (targetEnvironment == World.Environment.NORMAL) {
             targetLocation = Utils.findRandomLocationNear(targetPlayer.getLocation(), -100.0, 100.0);
             locationMessage = "§a[✔] 你已传送到 " + targetPlayer.getName() + " 附近100格的随机位置";
         } else if (targetEnvironment == World.Environment.NETHER) {
-            targetLocation = Utils.findRandomLocationNear(targetPlayer.getLocation(), targetPlayer.getLocation().getY(), 100.0);
+            targetLocation = Utils.findRandomLocationNear(targetPlayer.getLocation(), targetPlayer.getLocation().getY(),
+                    100.0);
             locationMessage = "§a[✔] 你已传送到 " + targetPlayer.getName() + " 附近100格的随机位置";
         } else if (targetEnvironment == World.Environment.THE_END) {
             targetLocation = Utils.findRandomLocationNear(targetPlayer.getLocation(), 192.0, 100.0);
             locationMessage = "§a[✔] 你已传送到 " + targetPlayer.getName() + " 附近100格的随机位置";
-            endDown(player);
+            Utils.endDown(player);
         }
         player.teleport(targetLocation);
         if (locationMessage != null) {
@@ -159,10 +185,15 @@ public class Teleport {
             player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 200, 10));
             player.addPotionEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE, 900, 0));
             player.addPotionEffect(new PotionEffect(PotionEffectType.WATER_BREATHING, 900, 0));
+            if (playerTeam == null || targetTeam == null)
+                return;
+
             if (sameTeam) {
-                Bukkit.broadcastMessage((getPlayerTeamIcon(player) + " " + player.getName() + " §7传送到了 " + getPlayerTeamIcon(targetPlayer) + " " + targetPlayer.getName() + " §7附近100格的随机位置"));
+                Bukkit.broadcastMessage((playerTeam.getIcon() + " " + player.getName() + " §7传送到了 "
+                        + targetTeam.getIcon() + " " + targetPlayer.getName() + " §7的位置"));
             } else {
-                Bukkit.broadcastMessage((getPlayerTeamIcon(player) + " " + player.getName() + " §7传送到了 " + getPlayerTeamIcon(targetPlayer) + " " + targetPlayer.getName() + " §7的位置"));
+                Bukkit.broadcastMessage((playerTeam.getIcon() + " " + player.getName() + " §7传送到了 "
+                        + targetTeam.getIcon() + " " + targetPlayer.getName() + " §7附近100格的随机位置"));
             }
         } else {
             player.sendMessage("§c[❌] 传送失败，未知原因！");

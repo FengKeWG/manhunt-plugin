@@ -8,6 +8,7 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.windguest.manhunt.Main;
 import org.windguest.manhunt.files.DataManager;
+import org.windguest.manhunt.jobs.Job;
 import org.windguest.manhunt.jobs.JobsManager;
 import org.windguest.manhunt.menus.JobsMenu;
 import org.windguest.manhunt.teams.Team;
@@ -17,6 +18,8 @@ import org.windguest.manhunt.utils.Utils;
 import org.windguest.manhunt.world.StructureManager;
 import org.windguest.manhunt.world.WorldManager;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 public class Game {
@@ -43,7 +46,7 @@ public class Game {
             public void run() {
                 if (countdown <= 0) {
                     Bukkit.getWorld("world").setGameRule(GameRule.SPECTATORS_GENERATE_CHUNKS, false);
-                    assignTeams();
+                    TeamsManager.assignTeams();
                     Teleport.teleportPlayersToTeamBases();
                     StructureManager.startNearestStructureUpdater();
                     startFrozenCountdown();
@@ -66,14 +69,31 @@ public class Game {
         gameStartTime = System.currentTimeMillis();
         countdown = 60;
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (!JobsManager.hasChosenJob(player)) {
-                JobsMenu.open(player);
-            }
+            Compass.giveJobCompass(player);
         }
         new BukkitRunnable() {
             public void run() {
                 if (countdown <= 0) {
                     for (Player player : Bukkit.getOnlinePlayers()) {
+                        // Randomly assign job if not chosen
+                        if (!JobsManager.hasChosenJob(player)) {
+                            List<Job> availableJobs = new ArrayList<>(JobsManager.getJobs().values());
+                            if (!availableJobs.isEmpty()) {
+                                Job randomJob = availableJobs.get(rand.nextInt(availableJobs.size()));
+                                JobsManager.setChosenJob(player, randomJob);
+                                randomJob.giveKit(player);
+                                player.sendMessage("§e[!] 系统为你随机选择了职业: " + randomJob.getDisplayName());
+                            }
+                        }
+                        // Remove job compass
+                        for (ItemStack item : player.getInventory().getContents()) {
+                            if (item != null && item.getType() == Material.COMPASS && item.hasItemMeta()
+                                    && item.getItemMeta().getPersistentDataContainer()
+                                            .has(new NamespacedKey(plugin, "job_compass"))) {
+                                player.getInventory().remove(item);
+                            }
+                        }
+
                         World world = Bukkit.getWorld("world");
                         if (player.getWorld() != world && world != null) {
                             Location worldSpawn = world.getSpawnLocation();
@@ -107,9 +127,11 @@ public class Game {
                     return;
                 }
                 for (Player player : Bukkit.getOnlinePlayers()) {
-                    ChatColor color = countdown > 5 ? ChatColor.RED : (countdown > 2 ? ChatColor.YELLOW : ChatColor.GREEN);
+                    ChatColor color = countdown > 5 ? ChatColor.RED
+                            : (countdown > 2 ? ChatColor.YELLOW : ChatColor.GREEN);
                     player.sendTitle(color + String.valueOf(countdown), "观察四周！", 10, 20, 10);
-                    if (countdown > 5) continue;
+                    if (countdown > 5)
+                        continue;
                     player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_HARP, 1.0f, 1.0f);
                 }
                 --countdown;
@@ -138,8 +160,7 @@ public class Game {
             }
         }
         Utils.spawnManyRandomFireworks(endLocation);
-        Bukkit.getScheduler().runTask(plugin, () ->
-        {
+        Bukkit.getScheduler().runTask(plugin, () -> {
             for (Player player : Bukkit.getOnlinePlayers()) {
                 player.playSound(player.getLocation(), Sound.MUSIC_DISC_CHIRP, 3.0f, 1.0f);
             }

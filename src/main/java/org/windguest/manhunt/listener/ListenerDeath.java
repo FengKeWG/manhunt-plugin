@@ -13,8 +13,11 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.windguest.manhunt.Main;
 import org.windguest.manhunt.files.DataManager;
+import org.windguest.manhunt.game.Mode;
 import org.windguest.manhunt.game.Game;
+import org.windguest.manhunt.game.Teleport;
 import org.windguest.manhunt.teams.Team;
 import org.windguest.manhunt.teams.TeamsManager;
 import org.windguest.manhunt.utils.Utils;
@@ -22,7 +25,27 @@ import org.windguest.manhunt.utils.Utils;
 import java.util.Random;
 
 public class ListenerDeath implements Listener {
+    private static final Main plugin = Main.getInstance();
     private static final Random rand = new Random();
+
+    private static String getItemName(ItemStack item) {
+        if (item.hasItemMeta() && item.getItemMeta().hasDisplayName()) {
+            return item.getItemMeta().getDisplayName();
+        }
+        return switch (item.getType()) {
+            case WOODEN_SWORD -> "木剑";
+            case STONE_SWORD -> "石剑";
+            case IRON_SWORD -> "铁剑";
+            case GOLDEN_SWORD -> "金剑";
+            case DIAMOND_SWORD -> "钻石剑";
+            case NETHERITE_SWORD -> "下界合金剑";
+            case BOW -> "弓";
+            case CROSSBOW -> "弩";
+            case TRIDENT -> "三叉戟";
+            case WOODEN_AXE, STONE_AXE, IRON_AXE, GOLDEN_AXE, DIAMOND_AXE, NETHERITE_AXE -> "斧";
+            default -> item.getType().name().replace('_', ' ').toLowerCase();
+        };
+    }
 
     private static String getDeathCause(EntityDamageEvent.DamageCause cause) {
         return switch (cause) {
@@ -80,7 +103,18 @@ public class ListenerDeath implements Listener {
             DataManager.updatePlayerData(killer, "kills");
             String killerIcon = killerTeam.getIcon();
             killer.sendTitle("", "§c§l🗡 §r" + deadIcon + " " + victim.getName(), 10, 70, 20);
-            Bukkit.broadcastMessage("§f[☠] " + killerIcon + " " + killer.getName() + " §7击杀了 " + deadIcon + " " + victim.getName());
+
+            ItemStack weapon = killer.getInventory().getItemInMainHand();
+            String weaponDisplay;
+            if (weapon.getType() == Material.AIR) {
+                weaponDisplay = "§7用§e拳头§7";
+            } else {
+                weaponDisplay = "§7用§b[" + getItemName(weapon) + "§b]§7";
+            }
+
+            Bukkit.broadcastMessage(
+                    "§f[☠] " + killerIcon + " " + killer.getName() + " " + weaponDisplay + " 击杀了 " + deadIcon + " "
+                            + victim.getName());
         } else {
             String deathCause = getDeathCause(victim.getLastDamageCause().getCause());
             Bukkit.broadcastMessage("§f[☠] " + deadIcon + " " + victim.getName() + " §7因为" + deathCause + "死亡了");
@@ -117,6 +151,16 @@ public class ListenerDeath implements Listener {
             victim.removePotionEffect(effect.getType());
         }
         victim.addPotionEffect(new PotionEffect(PotionEffectType.NIGHT_VISION, Integer.MAX_VALUE, 0, true, false));
+
+        // Teleport spectator to a teammate or enemy
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            Team targetTeam = victimTeam.isEmpty() ? victimTeam.getOpponent() : victimTeam;
+            if (targetTeam != null && !targetTeam.isEmpty()) {
+                Teleport.teleportToRandomTeamPlayer(victim, targetTeam);
+                victim.sendMessage("§7你已死亡，正在传送至随机玩家身边...");
+            }
+        }, 20L); // Delay teleport slightly
+
         if (victimTeam.isEmpty()) {
             Game.endGame(victimTeam.getOpponent());
         }
@@ -135,7 +179,14 @@ public class ListenerDeath implements Listener {
             }
             event.getDrops().add(customNetherStar);
         } else if (entityType == EntityType.ENDER_DRAGON) {
-            Game.endGame(TeamsManager.getTopDamageTeam());
+            if (Mode.getCurrentMode() == Mode.GameMode.MANHUNT) {
+                Team runnerTeam = TeamsManager.getTeamByName("逃生者");
+                if (runnerTeam != null) {
+                    Game.endGame(runnerTeam);
+                }
+            } else {
+                Game.endGame(TeamsManager.getTopDamageTeam());
+            }
         } else if (entityType == EntityType.ENDERMAN) {
             event.getDrops().clear();
             event.getDrops().add(new ItemStack(Material.ENDER_PEARL, rand.nextInt(2) + 1));

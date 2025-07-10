@@ -14,11 +14,13 @@ import org.windguest.manhunt.Main;
 import org.windguest.manhunt.files.DataManager;
 import org.windguest.manhunt.game.Compass;
 import org.windguest.manhunt.game.Game;
+import org.windguest.manhunt.game.Mode;
 import org.windguest.manhunt.game.Teleport;
 import org.windguest.manhunt.menus.PlaySelectionMenu;
 import org.windguest.manhunt.menus.RulesMenu;
 import org.windguest.manhunt.teams.Team;
 import org.windguest.manhunt.teams.TeamsManager;
+import org.windguest.manhunt.menus.ManhuntJoinMenu;
 
 public class ListenerJoin implements Listener {
     private static final Main plugin = Main.getInstance();
@@ -42,6 +44,7 @@ public class ListenerJoin implements Listener {
             }
             if (Bukkit.getOnlinePlayers().size() >= 2) {
                 Game.startWaitingCountdown();
+                Mode.startVoting();
             }
         } else if (Game.getCurrentState() == Game.GameState.FROZEN) {
             Team quitTeam = TeamsManager.getQuitTeam(player);
@@ -73,19 +76,48 @@ public class ListenerJoin implements Listener {
                 Teleport.teleportToRandomTeamPlayer(player, null);
                 return;
             }
-            if (Game.getGameElapsedTime() <= 20 * 60 * 30) {
-                Bukkit.getScheduler().runTaskLater(plugin, () ->
-                {
+            if (Game.getGameElapsedTime() > 30 * 60) {
+                player.sendMessage("§7[🚫] 游戏已经进行了超过30分钟！你现在是旁观者");
+                player.setGameMode(GameMode.SPECTATOR);
+                Teleport.teleportToRandomTeamPlayer(player, null);
+                return;
+            }
+
+            // 根据游戏模式处理
+            Mode.GameMode currentMode = Mode.getCurrentMode();
+            if (currentMode == Mode.GameMode.TEAM || currentMode == Mode.GameMode.END) {
+                // 团队模式，打开通用选择菜单
+                Bukkit.getScheduler().runTaskLater(plugin, () -> {
                     player.setInvisible(true);
                     player.setInvulnerable(true);
                     PlaySelectionMenu.open(player);
                 }, 5L);
-            } else {
-                player.sendMessage("§7[🚫] 游戏已经进行了超过30分钟！你现在是旁观者");
-                player.setInvisible(false);
-                player.setInvulnerable(false);
-                player.setGameMode(GameMode.SPECTATOR);
-                Teleport.teleportToRandomTeamPlayer(player, null);
+            } else if (currentMode == Mode.GameMode.MANHUNT) {
+                // 猎人模式，根据比例决定可加入的阵营
+                Team hunterTeam = TeamsManager.getTeamByName("猎杀者");
+                Team runnerTeam = TeamsManager.getTeamByName("逃生者");
+
+                if (hunterTeam == null || runnerTeam == null)
+                    return; // 安全检查
+
+                int hunterCount = hunterTeam.getPlayerCount();
+                int runnerCount = runnerTeam.getPlayerCount();
+
+                // 防止除零
+                if (runnerCount == 0) {
+                    // 如果没有逃生者，必须加入逃生者
+                    Bukkit.getScheduler().runTaskLater(plugin, () -> ManhuntJoinMenu.open(player, "逃生者"), 5L);
+                    return;
+                }
+
+                double ratio = (double) hunterCount / runnerCount;
+                String joinableTeam = (ratio > 2.0) ? "逃生者" : "猎人";
+
+                Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                    player.setInvisible(true);
+                    player.setInvulnerable(true);
+                    ManhuntJoinMenu.open(player, joinableTeam);
+                }, 5L);
             }
         }
     }

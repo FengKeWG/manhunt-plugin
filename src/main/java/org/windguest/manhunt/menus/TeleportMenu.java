@@ -7,13 +7,19 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.SkullMeta;
+import org.windguest.manhunt.teams.Team;
+import org.windguest.manhunt.teams.TeamsManager;
+import org.bukkit.World;
+import org.bukkit.metadata.FixedMetadataValue;
+import org.windguest.manhunt.Main;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 public class TeleportMenu {
 
-    private void open(Player player, int pageIndex) {
+    public static void open(Player player, int pageIndex) {
         Inventory teleportMenu = Bukkit.createInventory(null, 54, ("传送 - 第 " + (pageIndex + 1) + " 页"));
         ItemStack previousPage = new ItemStack(Material.ARROW);
         ItemMeta previousPageMeta = previousPage.getItemMeta();
@@ -52,10 +58,9 @@ public class TeleportMenu {
             rulesItem.setItemMeta(rulesMeta);
         }
         teleportMenu.setItem(53, rulesItem);
-        ArrayList<Player> allPlayers = new ArrayList<>();
-        allPlayers.addAll(blue);
-        allPlayers.addAll(red);
-        allPlayers.remove(player);
+        Set<Player> allPlayersSet = TeamsManager.getAllGamingPlayers();
+        allPlayersSet.remove(player);
+        ArrayList<Player> allPlayers = new ArrayList<>(allPlayersSet);
         int totalPages = (int) Math.ceil((double) allPlayers.size() / 28.0);
         if (pageIndex < 0) {
             pageIndex = 0;
@@ -65,31 +70,32 @@ public class TeleportMenu {
         }
         int startIndex = pageIndex * 28;
         int endIndex = Math.min(startIndex + 28, allPlayers.size());
-        int[] slots = new int[]{10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 28, 29, 30, 31, 32, 33, 34, 37, 38, 39, 40, 41, 42, 43};
+        int[] slots = new int[] { 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 28, 29, 30, 31, 32, 33, 34,
+                37, 38, 39, 40, 41, 42, 43 };
         for (int i = startIndex; i < endIndex; ++i) {
             Player p = allPlayers.get(i);
+            Team playerTeam = TeamsManager.getPlayerTeam(player);
+            Team pTeam = TeamsManager.getPlayerTeam(p);
             ItemStack skull = new ItemStack(Material.PLAYER_HEAD);
             SkullMeta meta = (SkullMeta) skull.getItemMeta();
-            if (meta != null) {
-                String icon = blue.contains(p) ? "§9⚔" : "§c🏹";
+            if (meta != null && pTeam != null) {
+                String icon = pTeam.getIcon();
                 meta.setDisplayName(icon + " " + p.getName());
                 meta.setOwningPlayer(p);
                 ArrayList<String> lore = new ArrayList<>();
                 lore.add("");
                 if (player.getWorld().equals(p.getWorld())) {
                     int distance = (int) player.getLocation().distance(p.getLocation());
-                    if (red.contains(p)) {
-                        lore.add("§c" + getWorldName(p.getWorld()) + " [" + p.getLocation().getBlockX() + ", " + p.getLocation().getBlockY() + ", " + p.getLocation().getBlockZ() + "]");
-                        lore.add("§c距离: " + distance + "格");
-                    } else {
-                        lore.add("§9" + getWorldName(p.getWorld()) + " [" + p.getLocation().getBlockX() + ", " + p.getLocation().getBlockY() + ", " + p.getLocation().getBlockZ() + "]");
-                        lore.add("§9距离: " + distance + "格");
-                    }
+                    lore.add(pTeam.getColorString() + getWorldName(p.getWorld()) + " [" + p.getLocation().getBlockX()
+                            + ", " + p.getLocation().getBlockY() + ", " + p.getLocation().getBlockZ() + "]");
+                    lore.add(pTeam.getColorString() + "距离: " + distance + "格");
                 } else {
-                    lore.add("§c" + getWorldName(p.getWorld()));
-                    lore.add("§c不同世界");
+                    lore.add(pTeam.getColorString() + getWorldName(p.getWorld()));
+                    lore.add(pTeam.getColorString() + "不同世界");
                 }
-                if ((blue.contains(p) && blue.contains((player)) || (red.contains(p) && red.contains((player))))) {
+
+                boolean sameTeam = playerTeam != null && playerTeam.equals(pTeam);
+                if (sameTeam) {
                     lore.add("");
                     lore.add("§e点击消耗 §f9.5 §c❤");
                     lore.add("§e传送到他的位置");
@@ -103,7 +109,20 @@ public class TeleportMenu {
             }
             teleportMenu.setItem(slots[i - startIndex], skull);
         }
-        playerPageIndex.put(player, pageIndex);
+        player.setMetadata("teleport_page", new FixedMetadataValue(Main.getInstance(), pageIndex));
         player.openInventory(teleportMenu);
+    }
+
+    private static String getWorldName(World world) {
+        switch (world.getEnvironment()) {
+            case NORMAL:
+                return "主世界";
+            case NETHER:
+                return "下界";
+            case THE_END:
+                return "末地";
+            default:
+                return "未知";
+        }
     }
 }

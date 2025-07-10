@@ -3,6 +3,7 @@ package org.windguest.manhunt;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.windguest.manhunt.commands.ShoutCommand;
+import org.windguest.manhunt.jobs.JobsManager;
 import org.windguest.manhunt.listener.ListenerJoin;
 import org.windguest.manhunt.listener.ListenerWorld;
 
@@ -17,6 +18,7 @@ public final class Main extends JavaPlugin {
     @Override
     public void onEnable() {
         instance = this;
+        JobsManager.initializeJobs();
         ShoutCommand shoutCommand = new ShoutCommand();
         this.getCommand("s").setExecutor(shoutCommand);
         Bukkit.getPluginManager().registerEvents(new ListenerJoin(), this);
