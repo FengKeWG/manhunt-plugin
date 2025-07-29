@@ -10,11 +10,10 @@ import org.windguest.manhunt.Main;
 import org.windguest.manhunt.files.DataManager;
 import org.windguest.manhunt.jobs.Job;
 import org.windguest.manhunt.jobs.JobsManager;
-import org.windguest.manhunt.menus.JobsMenu;
 import org.windguest.manhunt.teams.Team;
 import org.windguest.manhunt.teams.TeamsManager;
-import org.windguest.manhunt.utils.ChunkyManager;
 import org.windguest.manhunt.utils.Utils;
+import org.windguest.manhunt.world.ChunkyManager;
 import org.windguest.manhunt.world.StructureManager;
 import org.windguest.manhunt.world.WorldManager;
 
@@ -30,6 +29,14 @@ public class Game {
     private static int countdown = 120;
     private static Location endLocation;
 
+    public static Location getEndLocation() {
+        return endLocation;
+    }
+
+    public static void setEndLocation(Location loc) {
+        endLocation = loc;
+    }
+
     public static GameState getCurrentState() {
         return currentState;
     }
@@ -38,13 +45,26 @@ public class Game {
         Game.currentState = currentState;
     }
 
+    public static int getCountdown() {
+        return countdown;
+    }
+
     public static void startWaitingCountdown() {
+        if (currentState != GameState.WAITING) {
+            return; // 避免重复启动导致多个定时任务并行
+        }
         currentState = GameState.COUNTDOWN_STARTED;
         countdown = 120;
         new BukkitRunnable() {
 
             public void run() {
                 if (countdown <= 0) {
+                    // 尝试停止 Chunky 并替换为已预生成地图（若存在）
+                    boolean replaced = ChunkyManager.prepareWorldForGame();
+                    if (replaced) {
+                        Bukkit.broadcastMessage("§e[Chunky] 已加载预生成地图，加速开始游戏！");
+                    }
+
                     Bukkit.getWorld("world").setGameRule(GameRule.SPECTATORS_GENERATE_CHUNKS, false);
                     TeamsManager.assignTeams();
                     Teleport.teleportPlayersToTeamBases();
@@ -69,23 +89,49 @@ public class Game {
         gameStartTime = System.currentTimeMillis();
         countdown = 60;
         for (Player player : Bukkit.getOnlinePlayers()) {
+            // 猎杀者不发职业指南针
+            if (Mode.getCurrentMode() == Mode.GameMode.MANHUNT) {
+                Team pt = TeamsManager.getPlayerTeam(player);
+                if (pt != null && "猎杀者".equals(pt.getName())) {
+                    continue;
+                }
+            }
             Compass.giveJobCompass(player);
         }
         new BukkitRunnable() {
             public void run() {
                 if (countdown <= 0) {
                     for (Player player : Bukkit.getOnlinePlayers()) {
+                        if (TeamsManager.isSpectator(player)) {
+                            continue;
+                        }
+                        // Increment games played
+                        if (Mode.getCurrentMode() == Mode.GameMode.MANHUNT) {
+                            String role = TeamsManager.getPlayerTeam(player).getName().equals("逃生者") ? "runner"
+                                    : "hunter";
+                            DataManager.incrementPlayerData(player, Mode.getCurrentMode(), role, "games", 1);
+                        } else {
+                            DataManager.incrementPlayerData(player, Mode.getCurrentMode(), "games", 1);
+                        }
+
                         // Randomly assign job if not chosen
+                        if (Mode.getCurrentMode() == Mode.GameMode.MANHUNT) {
+                            Team pt = TeamsManager.getPlayerTeam(player);
+                            if (pt != null && "猎杀者".equals(pt.getName())) {
+                                // 猎杀者不能选职业
+                                JobsManager.setChosenJob(player, null);
+                            }
+                        }
+
                         if (!JobsManager.hasChosenJob(player)) {
                             List<Job> availableJobs = new ArrayList<>(JobsManager.getJobs().values());
                             if (!availableJobs.isEmpty()) {
                                 Job randomJob = availableJobs.get(rand.nextInt(availableJobs.size()));
                                 JobsManager.setChosenJob(player, randomJob);
                                 randomJob.giveKit(player);
-                                player.sendMessage("§e[!] 系统为你随机选择了职业: " + randomJob.getDisplayName());
+                                player.sendMessage("§e[⚠] 系统为你随机选择了职业: " + randomJob.getDisplayName());
                             }
                         }
-                        // Remove job compass
                         for (ItemStack item : player.getInventory().getContents()) {
                             if (item != null && item.getType() == Material.COMPASS && item.hasItemMeta()
                                     && item.getItemMeta().getPersistentDataContainer()
@@ -143,11 +189,34 @@ public class Game {
         if (currentState == GameState.ENDED) {
             return;
         }
+        if (endLocation == null) {
+            World world = Bukkit.getWorld("world");
+            endLocation = world != null ? world.getSpawnLocation() : new Location(Bukkit.getWorlds().get(0), 0, 100, 0);
+        }
         currentState = GameState.ENDED;
         for (Player player : Bukkit.getOnlinePlayers()) {
             player.setGameMode(org.bukkit.GameMode.SPECTATOR);
             player.teleport(endLocation);
             wonTeam.sendWinMessage(player);
+            // Title
+            String titleColor;
+            switch (wonTeam.getName()) {
+                case "红队":
+                    titleColor = "§c🎈 ";
+                    break;
+                case "蓝队":
+                    titleColor = "§9🎯 ";
+                    break;
+                case "逃生者":
+                    titleColor = "§a🐉 ";
+                    break;
+                case "猎杀者":
+                    titleColor = "§c🏹 ";
+                    break;
+                default:
+                    titleColor = wonTeam.getColorString();
+            }
+            player.sendTitle("", titleColor + wonTeam.getName() + "获胜！", 10, 70, 20);
             Team team = TeamsManager.getPlayerTeam(player);
             if (team == null) {
                 team = TeamsManager.getDeadTeam(player);
@@ -156,7 +225,12 @@ public class Game {
                 continue;
             }
             if (team.equals(wonTeam)) {
-                DataManager.updatePlayerData(player, "wins");
+                if (Mode.getCurrentMode() == Mode.GameMode.MANHUNT) {
+                    String role = team.getName().equals("逃生者") ? "runner" : "hunter";
+                    DataManager.incrementPlayerData(player, Mode.getCurrentMode(), role, "wins", 1);
+                } else {
+                    DataManager.incrementPlayerData(player, Mode.getCurrentMode(), "wins", 1);
+                }
             }
         }
         Utils.spawnManyRandomFireworks(endLocation);
@@ -176,11 +250,6 @@ public class Game {
     }
 
     public enum GameState {
-        WAITING,
-        COUNTDOWN_STARTED,
-        FROZEN,
-        RUNNING,
-        PAUSED,
-        ENDED,
+        WAITING, COUNTDOWN_STARTED, FROZEN, RUNNING, PAUSED, ENDED,
     }
 }

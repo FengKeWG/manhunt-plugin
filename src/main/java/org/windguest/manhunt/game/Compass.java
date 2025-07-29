@@ -25,8 +25,7 @@ public class Compass {
             meta.setDisplayName("§a大厅指南针§7（左键或右键点击）");
             List<String> lore = Arrays.asList("§7按下§f[左键]§7打开游戏规则", "§7按下§f[右键]§7选择模式/队伍");
             meta.setLore(lore);
-            meta.getPersistentDataContainer().set(new NamespacedKey(plugin, "hub_compass"), PersistentDataType.BYTE,
-                    (byte) 1);
+            meta.getPersistentDataContainer().set(new NamespacedKey(plugin, "hub_compass"), PersistentDataType.BYTE, (byte) 1);
             teamSelector.setItemMeta(meta);
         }
         player.getInventory().setItem(0, teamSelector);
@@ -39,8 +38,7 @@ public class Compass {
             meta.setDisplayName("§b职业选择§7（右键点击）");
             List<String> lore = Arrays.asList("§7右键打开职业选择菜单", "§c游戏开始时未选择将随机分配！");
             meta.setLore(lore);
-            meta.getPersistentDataContainer().set(new NamespacedKey(plugin, "job_compass"), PersistentDataType.BYTE,
-                    (byte) 1);
+            meta.getPersistentDataContainer().set(new NamespacedKey(plugin, "job_compass"), PersistentDataType.BYTE, (byte) 1);
             compass.setItemMeta(meta);
         }
         player.getInventory().addItem(compass);
@@ -54,8 +52,7 @@ public class Compass {
             meta.setDisplayName(displayName);
             List<String> lore = Arrays.asList("§7按下§f[左键]§7打开传送菜单", "§7按下§f[右键]§7打开共享背包");
             meta.setLore(lore);
-            meta.getPersistentDataContainer().set(new NamespacedKey(plugin, "game_compass"), PersistentDataType.BYTE,
-                    (byte) 1);
+            meta.getPersistentDataContainer().set(new NamespacedKey(plugin, "game_compass"), PersistentDataType.BYTE, (byte) 1);
             compass.setItemMeta(meta);
         }
         player.getInventory().addItem(compass);
@@ -63,15 +60,23 @@ public class Compass {
 
     public static void updateCompass() {
         for (Player player : Bukkit.getOnlinePlayers()) {
+            if (TeamsManager.getPlayerTeam(player) == null) {
+                continue; // 旁观者不显示 ActionBar
+            }
             Player nearestEnemy = findNearestEnemy(player);
             if (nearestEnemy != null) {
-                int distance = (int) player.getLocation().distance(nearestEnemy.getLocation());
+                int rawDist = (int) player.getLocation().distance(nearestEnemy.getLocation());
+                boolean ghost = org.windguest.manhunt.jobs.JobsManager.isGhost(nearestEnemy);
+                String distance;
+                if (ghost) {
+                    distance = rawDist < 32 ? "<32" : String.valueOf(rawDist);
+                } else {
+                    distance = rawDist < 10 ? "<10" : String.valueOf(rawDist);
+                }
                 String direction = getHorizontalDirectionToTarget(player, nearestEnemy);
                 Team team = TeamsManager.getPlayerTeam(nearestEnemy);
-                if (team == null)
-                    continue;
-                player.sendActionBar("§9最近的敌人: " + direction + " §r" + team.getColorString() + nearestEnemy.getName()
-                        + "（" + distance + "格）");
+                if (team == null) continue;
+                player.sendActionBar(team.getColorString() + "最近的敌人: " + direction + " §r" + team.getColorString() + nearestEnemy.getName() + "（" + distance + "格）");
                 player.setCompassTarget(nearestEnemy.getLocation());
                 continue;
             }
@@ -83,12 +88,13 @@ public class Compass {
         Player nearest = null;
         double nearestDistance = Double.MAX_VALUE;
         for (Player p : Bukkit.getOnlinePlayers()) {
-            if (player == p)
-                continue;
+            if (player == p) continue;
+            if (TeamsManager.getPlayerTeam(p) == null) {
+                continue; // 旁观者不计入敌人
+            }
             if (!TeamsManager.areSameTeam(player, p)) {
                 double distance;
-                if (!player.getWorld().equals(p.getWorld())
-                        || !((distance = player.getLocation().distance(p.getLocation())) < nearestDistance))
+                if (!player.getWorld().equals(p.getWorld()) || !((distance = player.getLocation().distance(p.getLocation())) < nearestDistance))
                     continue;
                 nearestDistance = distance;
                 nearest = p;
@@ -100,8 +106,7 @@ public class Compass {
     private static String getHorizontalDirectionToTarget(Player player, Player target) {
         Vector playerDirection = player.getLocation().getDirection().setY(0).normalize();
         Vector toTarget = target.getLocation().toVector().subtract(player.getLocation().toVector()).setY(0).normalize();
-        double angle = Math.toDegrees(Math.atan2(toTarget.getZ(), toTarget.getX())
-                - Math.atan2(playerDirection.getZ(), playerDirection.getX()));
+        double angle = Math.toDegrees(Math.atan2(toTarget.getZ(), toTarget.getX()) - Math.atan2(playerDirection.getZ(), playerDirection.getX()));
         if ((angle = (angle + 360.0) % 360.0) >= 337.5 || angle < 22.5) {
             return "↑";
         }

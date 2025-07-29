@@ -96,15 +96,6 @@ public class Utils {
         firework.setFireworkMeta(fireworkMeta);
     }
 
-    private String getWorldName(World world) {
-        return switch (world.getEnvironment()) {
-            case NORMAL -> "主世界";
-            case NETHER -> "下界";
-            case THE_END -> "末地";
-            default -> "未知世界";
-        };
-    }
-
     private boolean hasCompass(Player player) {
         for (ItemStack item : player.getInventory().getContents()) {
             if (item == null || item.getType() != Material.COMPASS

@@ -1,17 +1,16 @@
 package org.windguest.manhunt.game;
 
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.windguest.manhunt.Main;
+import org.windguest.manhunt.teams.TeamsManager;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
 import java.util.stream.Collectors;
-import org.windguest.manhunt.teams.TeamsManager;
 
 public class Mode {
     private static final Main plugin = Main.getInstance();
@@ -34,12 +33,6 @@ public class Mode {
 
     public static void setPreference(Player player, GameMode mode) {
         gamemodePreferences.put(player, mode);
-    }
-
-    public enum GameMode {
-        MANHUNT,
-        TEAM,
-        END,
     }
 
     public static void startVoting() {
@@ -70,7 +63,10 @@ public class Mode {
     private static void calculateWinner() {
         if (gamemodePreferences.isEmpty()) {
             currentMode = GameMode.values()[rand.nextInt(GameMode.values().length)];
-            Bukkit.broadcastMessage("§e[!] 没有玩家投票，随机选择模式：" + getModeName(currentMode));
+            if (currentMode == GameMode.END) {
+                currentMode = GameMode.TEAM;
+            }
+            Bukkit.broadcastMessage("§e[⚠] 没有玩家投票，随机选择模式：" + getModeName(currentMode));
         } else {
             Map<GameMode, Long> votes = gamemodePreferences.values().stream()
                     .collect(Collectors.groupingBy(e -> e, Collectors.counting()));
@@ -82,8 +78,7 @@ public class Mode {
             }
             long finalMaxVotes = maxVotes;
             java.util.List<GameMode> winners = votes.entrySet().stream()
-                    .filter(entry -> entry.getValue() == finalMaxVotes)
-                    .map(Map.Entry::getKey)
+                    .filter(entry -> entry.getValue() == finalMaxVotes).map(Map.Entry::getKey)
                     .collect(Collectors.toList());
             currentMode = winners.get(rand.nextInt(winners.size()));
             Bukkit.broadcastMessage("§a[✔] 投票结束！最终模式为：" + getModeName(currentMode));
@@ -101,7 +96,11 @@ public class Mode {
             case END:
                 return "§d浑沌末地";
             default:
-                return "未知";
+                return "§7未开始";
         }
+    }
+
+    public enum GameMode {
+        MANHUNT, TEAM, END,
     }
 }

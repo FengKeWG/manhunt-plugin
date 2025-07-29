@@ -75,32 +75,38 @@ public class Teleport {
 
     public static void teleportToRandomTeamPlayer(Player player, Team team) {
 
-        Set<Player> players;
+        Set<Player> src;
         if (team != null) {
-            players = team.getPlayers();
+            src = team.getPlayers();
         } else {
-            players = TeamsManager.getAllGamingPlayers();
+            src = TeamsManager.getAllGamingPlayers();
         }
-        players.remove(player);
-        if (players.isEmpty()) {
+        // 复制到可修改集合，避免对不可修改集合调用 remove
+        Set<Player> candidates = new java.util.HashSet<>(src);
+        candidates.remove(player);
+        if (candidates.isEmpty()) {
             return;
         }
-        players.stream()
-                .skip(rand.nextInt(players.size()))
+        candidates.stream()
+                .skip(rand.nextInt(candidates.size()))
                 .findFirst()
                 .ifPresent(randomPlayer -> player.teleport(randomPlayer.getLocation()));
     }
 
     public static void startTeleportCountdown(Player player, Player targetPlayer, int cost) {
+        // 开局前 5 分钟禁止传送
+        if (org.windguest.manhunt.game.Game.getGameElapsedTime() < 300) {
+            player.sendMessage("§c[❌] 游戏开始 5 分钟内无法传送！");
+            player.playSound(player.getLocation(), org.bukkit.Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f);
+            return;
+        }
+        // 标记正在倒计时
+        player.setMetadata("teleporting", new org.bukkit.metadata.FixedMetadataValue(plugin, true));
         player.closeInventory();
         new BukkitRunnable() {
             int countdown = 5;
 
             public void run() {
-                if (player.getOpenInventory().getTitle().contains("共享背包")) {
-                    cancel();
-                    return;
-                }
                 ChatColor color;
                 if (countdown <= 0) {
                     teleportPlayer(player, targetPlayer, cost);
@@ -147,12 +153,14 @@ public class Teleport {
         } else {
             player.sendMessage("§c[❌] 你的血量不足以进行传送！");
             player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f);
+            player.removeMetadata("teleporting", plugin);
             return;
         }
         if (targetPlayer.getWorld().getEnvironment() == World.Environment.THE_END) {
             if (!playerTeam.isEndPortalOpened()) {
                 player.sendMessage("§c[❌] 你的队伍还没有进入过末地，你不能传送到末地的敌人！");
                 player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f);
+                player.removeMetadata("teleporting", plugin);
                 return;
             }
         }
@@ -189,14 +197,19 @@ public class Teleport {
                 return;
 
             if (sameTeam) {
-                Bukkit.broadcastMessage((playerTeam.getIcon() + " " + player.getName() + " §7传送到了 "
-                        + targetTeam.getIcon() + " " + targetPlayer.getName() + " §7的位置"));
+                Bukkit.broadcastMessage(
+                        (playerTeam.getColorString() + playerTeam.getIcon() + " " + player.getName() + " §7传送到了 "
+                                + targetTeam.getColorString() + targetTeam.getIcon() + " " + targetPlayer.getName()
+                                + " §7的位置"));
             } else {
-                Bukkit.broadcastMessage((playerTeam.getIcon() + " " + player.getName() + " §7传送到了 "
-                        + targetTeam.getIcon() + " " + targetPlayer.getName() + " §7附近100格的随机位置"));
+                Bukkit.broadcastMessage(
+                        (playerTeam.getColorString() + playerTeam.getIcon() + " " + player.getName() + " §7传送到了 "
+                                + targetTeam.getColorString() + targetTeam.getIcon() + " " + targetPlayer.getName()
+                                + " §7附近100格的随机位置"));
             }
         } else {
             player.sendMessage("§c[❌] 传送失败，未知原因！");
+            player.removeMetadata("teleporting", plugin);
         }
     }
 }

@@ -15,7 +15,7 @@ public class JobsMenu {
     private static final Main plugin = Main.getInstance();
 
     public static void open(Player player) {
-        Inventory menu = Bukkit.createInventory(null, 27, "选择职业");
+        Inventory menu = Bukkit.createInventory(null, 45, "选择职业");
         Map<Integer, Job> jobs = JobsManager.getJobs();
         for (Job job : jobs.values()) {
             ItemStack item = new ItemStack(job.getIconMaterial());

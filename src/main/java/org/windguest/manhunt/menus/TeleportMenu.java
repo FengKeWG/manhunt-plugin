@@ -2,16 +2,17 @@ package org.windguest.manhunt.menus;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.SkullMeta;
-import org.windguest.manhunt.teams.Team;
-import org.windguest.manhunt.teams.TeamsManager;
-import org.bukkit.World;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.windguest.manhunt.Main;
+import org.windguest.manhunt.teams.Team;
+import org.windguest.manhunt.teams.TeamsManager;
+import org.windguest.manhunt.jobs.JobsManager;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -79,19 +80,23 @@ public class TeleportMenu {
             ItemStack skull = new ItemStack(Material.PLAYER_HEAD);
             SkullMeta meta = (SkullMeta) skull.getItemMeta();
             if (meta != null && pTeam != null) {
-                String icon = pTeam.getIcon();
-                meta.setDisplayName(icon + " " + p.getName());
+                meta.setDisplayName(pTeam.getColorString() + pTeam.getIcon() + " " + p.getName());
                 meta.setOwningPlayer(p);
                 ArrayList<String> lore = new ArrayList<>();
                 lore.add("");
-                if (player.getWorld().equals(p.getWorld())) {
+                boolean isGhost = org.windguest.manhunt.jobs.JobsManager.isGhost(p);
+                if (!isGhost && player.getWorld().equals(p.getWorld())) {
                     int distance = (int) player.getLocation().distance(p.getLocation());
                     lore.add(pTeam.getColorString() + getWorldName(p.getWorld()) + " [" + p.getLocation().getBlockX()
                             + ", " + p.getLocation().getBlockY() + ", " + p.getLocation().getBlockZ() + "]");
                     lore.add(pTeam.getColorString() + "距离: " + distance + "格");
                 } else {
-                    lore.add(pTeam.getColorString() + getWorldName(p.getWorld()));
-                    lore.add(pTeam.getColorString() + "不同世界");
+                    if (isGhost) {
+                        lore.add(pTeam.getColorString() + "位置: §o???");
+                    } else {
+                        lore.add(pTeam.getColorString() + getWorldName(p.getWorld()));
+                        lore.add(pTeam.getColorString() + "不同世界");
+                    }
                 }
 
                 boolean sameTeam = playerTeam != null && playerTeam.equals(pTeam);

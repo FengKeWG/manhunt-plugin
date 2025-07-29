@@ -9,18 +9,16 @@ import org.windguest.manhunt.Main;
 import org.windguest.manhunt.game.Mode;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArraySet;
 
 public class TeamsManager {
     private static final Main plugin = Main.getInstance();
-    private static final Map<UUID, Team> quit = new HashMap<>();
-    private static final Map<UUID, Team> dead = new HashMap<>();
-    private static final Set<Team> teams = new HashSet<>();
-    private static final Map<Player, TeamPreference> teamPreferences = new HashMap<>();
+    private static final Map<UUID, Team> quit = new ConcurrentHashMap<>();
+    private static final Map<UUID, Team> dead = new ConcurrentHashMap<>();
+    private static final Set<Team> teams = new CopyOnWriteArraySet<>();
+    private static final Map<Player, TeamPreference> teamPreferences = new ConcurrentHashMap<>();
     private static boolean isPrefVotingStarted = false;
-
-    public enum TeamPreference {
-        RED, BLUE, RUNNER, HUNTER, NONE
-    }
 
     public static Map<Player, TeamPreference> getTeamPreferences() {
         return teamPreferences;
@@ -43,8 +41,7 @@ public class TeamsManager {
             public void run() {
                 if (time == 60 || time == 30 || time == 10 || time <= 5 && time > 0) {
                     Bukkit.broadcastMessage("§e[!] 队伍倾向选择还剩 " + time + " 秒！");
-                    Bukkit.getOnlinePlayers()
-                            .forEach(p -> p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.0f));
+                    Bukkit.getOnlinePlayers().forEach(p -> p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.0f));
                 }
                 if (time <= 0) {
                     this.cancel();
@@ -121,8 +118,8 @@ public class TeamsManager {
 
     public static void initializeTeams() {
         if (Mode.getCurrentMode() == Mode.GameMode.TEAM || Mode.getCurrentMode() == Mode.GameMode.END) {
-            Team redTeam = new Team("红队", "§c", "🏹", Color.RED);
-            Team blueTeam = new Team("蓝队", "§9", "⚔", Color.BLUE);
+            Team redTeam = new Team("红队", "§c", "🎈", Color.RED);
+            Team blueTeam = new Team("蓝队", "§9", "🎯", Color.BLUE);
             teams.add(redTeam);
             teams.add(blueTeam);
             redTeam.opponent = blueTeam;
@@ -155,23 +152,18 @@ public class TeamsManager {
             List<Player> none = new ArrayList<>();
             for (Player p : players) {
                 TeamPreference pref = prefMap.getOrDefault(p, TeamPreference.NONE);
-                if (pref == TeamPreference.RED)
-                    redPref.add(p);
-                else if (pref == TeamPreference.BLUE)
-                    bluePref.add(p);
-                else
-                    none.add(p);
+                if (pref == TeamPreference.RED) redPref.add(p);
+                else if (pref == TeamPreference.BLUE) bluePref.add(p);
+                else none.add(p);
             }
 
             boolean toRed = true;
             while (!redPref.isEmpty() || !bluePref.isEmpty() || !none.isEmpty()) {
                 if (toRed) {
-                    Player p = !redPref.isEmpty() ? redPref.remove(0)
-                            : !none.isEmpty() ? none.remove(0) : bluePref.remove(0);
+                    Player p = !redPref.isEmpty() ? redPref.remove(0) : !none.isEmpty() ? none.remove(0) : bluePref.remove(0);
                     red.addPlayer(p);
                 } else {
-                    Player p = !bluePref.isEmpty() ? bluePref.remove(0)
-                            : !none.isEmpty() ? none.remove(0) : redPref.remove(0);
+                    Player p = !bluePref.isEmpty() ? bluePref.remove(0) : !none.isEmpty() ? none.remove(0) : redPref.remove(0);
                     blue.addPlayer(p);
                 }
                 toRed = !toRed;
@@ -185,12 +177,9 @@ public class TeamsManager {
             List<Player> none = new ArrayList<>();
             for (Player p : players) {
                 TeamPreference pref = prefMap.getOrDefault(p, TeamPreference.NONE);
-                if (pref == TeamPreference.RUNNER)
-                    runPref.add(p);
-                else if (pref == TeamPreference.HUNTER)
-                    huntPref.add(p);
-                else
-                    none.add(p);
+                if (pref == TeamPreference.RUNNER) runPref.add(p);
+                else if (pref == TeamPreference.HUNTER) huntPref.add(p);
+                else none.add(p);
             }
 
             int totalPlayers = players.size();
@@ -208,14 +197,33 @@ public class TeamsManager {
                 hunter.addPlayer(p);
             for (Player p : none)
                 hunter.addPlayer(p);
+
+            // 若逃生者数量仍不足（例如所有人都选择猎杀者），则从猎杀者队伍中强制转移部分玩家
+            int deficit = desiredRunners - runner.getPlayerCount();
+            if (deficit > 0) {
+                Iterator<Player> it = new ArrayList<>(hunter.getPlayers()).iterator();
+                while (deficit > 0 && it.hasNext()) {
+                    Player p = it.next();
+                    hunter.removePlayer(p);
+                    runner.addPlayer(p);
+                    deficit--;
+                }
+            }
         }
     }
 
     public static Team getTeamByName(String name) {
         for (Team t : teams) {
-            if (t.getName().equals(name))
-                return t;
+            if (t.getName().equals(name)) return t;
         }
         return null;
+    }
+
+    public static boolean isSpectator(Player player) {
+        return getPlayerTeam(player) == null;
+    }
+
+    public enum TeamPreference {
+        RED, BLUE, RUNNER, HUNTER, NONE
     }
 }

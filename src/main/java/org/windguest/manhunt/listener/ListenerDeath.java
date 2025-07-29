@@ -13,14 +13,16 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.scheduler.BukkitRunnable;
 import org.windguest.manhunt.Main;
 import org.windguest.manhunt.files.DataManager;
-import org.windguest.manhunt.game.Mode;
 import org.windguest.manhunt.game.Game;
+import org.windguest.manhunt.game.Mode;
 import org.windguest.manhunt.game.Teleport;
 import org.windguest.manhunt.teams.Team;
 import org.windguest.manhunt.teams.TeamsManager;
 import org.windguest.manhunt.utils.Utils;
+import org.windguest.manhunt.game.Compass;
 
 import java.util.Random;
 
@@ -42,6 +44,7 @@ public class ListenerDeath implements Listener {
             case BOW -> "弓";
             case CROSSBOW -> "弩";
             case TRIDENT -> "三叉戟";
+            case MACE -> "重锤";
             case WOODEN_AXE, STONE_AXE, IRON_AXE, GOLDEN_AXE, DIAMOND_AXE, NETHERITE_AXE -> "斧";
             default -> item.getType().name().replace('_', ' ').toLowerCase();
         };
@@ -97,29 +100,41 @@ public class ListenerDeath implements Listener {
         if (victimTeam == null) {
             return;
         }
-        String deadIcon = victimTeam.getIcon();
         if (killer != null) {
             Team killerTeam = TeamsManager.getPlayerTeam(killer);
-            DataManager.updatePlayerData(killer, "kills");
-            String killerIcon = killerTeam.getIcon();
-            killer.sendTitle("", "§c§l🗡 §r" + deadIcon + " " + victim.getName(), 10, 70, 20);
+            if (Mode.getCurrentMode() == Mode.GameMode.MANHUNT) {
+                String role = TeamsManager.getPlayerTeam(killer).getName().equals("逃生者") ? "runner" : "hunter";
+                DataManager.incrementPlayerData(killer, Mode.getCurrentMode(), role, "kills", 1);
+            } else {
+                DataManager.incrementPlayerData(killer, Mode.getCurrentMode(), "kills", 1);
+            }
+            killer.sendTitle("",
+                    "§c§l🗡 §r" + victimTeam.getColorString() + victimTeam.getIcon() + " " + victim.getName(), 10, 70,
+                    20);
 
             ItemStack weapon = killer.getInventory().getItemInMainHand();
             String weaponDisplay;
             if (weapon.getType() == Material.AIR) {
                 weaponDisplay = "§7用§e拳头§7";
             } else {
-                weaponDisplay = "§7用§b[" + getItemName(weapon) + "§b]§7";
+                weaponDisplay = "§7用 §b[" + getItemName(weapon) + "§b]§7";
             }
 
-            Bukkit.broadcastMessage(
-                    "§f[☠] " + killerIcon + " " + killer.getName() + " " + weaponDisplay + " 击杀了 " + deadIcon + " "
-                            + victim.getName());
+            Bukkit.broadcastMessage("§f[☠] " + killerTeam.getColorString() + killerTeam.getIcon() + " "
+                    + killer.getName() + " " + weaponDisplay + " 击杀了 " + victimTeam.getColorString()
+                    + victimTeam.getIcon() + " " + victim.getName());
         } else {
             String deathCause = getDeathCause(victim.getLastDamageCause().getCause());
-            Bukkit.broadcastMessage("§f[☠] " + deadIcon + " " + victim.getName() + " §7因为" + deathCause + "死亡了");
+            Bukkit.broadcastMessage("§f[☠] " + victimTeam.getColorString() + victimTeam.getIcon() + " "
+                    + victim.getName() + " §7因为" + deathCause + "死亡了");
         }
-        DataManager.updatePlayerData(victim, "deaths");
+        if (Mode.getCurrentMode() == Mode.GameMode.MANHUNT) {
+            String roleV = TeamsManager.getPlayerTeam(victim) != null
+                    && TeamsManager.getPlayerTeam(victim).getName().equals("逃生者") ? "runner" : "hunter";
+            DataManager.incrementPlayerData(victim, Mode.getCurrentMode(), roleV, "deaths", 1);
+        } else {
+            DataManager.incrementPlayerData(victim, Mode.getCurrentMode(), "deaths", 1);
+        }
         Location deathLocation = victim.getLocation();
         World world = victim.getWorld();
         for (ItemStack item : victim.getInventory().getContents()) {
@@ -138,7 +153,56 @@ public class ListenerDeath implements Listener {
                 world.dropItemNaturally(deathLocation, armor);
             }
         }
+
+        // 清空背包与护甲栏，防止掉落后仍然留存
+        victim.getInventory().clear();
+        victim.getInventory().setArmorContents(new org.bukkit.inventory.ItemStack[4]);
+        // 如果是追杀模式且死者为猎杀者，实现 5 秒复活，不从队伍移除
+        if (Mode.getCurrentMode() == Mode.GameMode.MANHUNT && "猎杀者".equals(victimTeam.getName())) {
+            victim.setGameMode(GameMode.SPECTATOR);
+
+            // 5 秒复活计时
+            new BukkitRunnable() {
+                int time = 5;
+
+                @Override
+                public void run() {
+                    if (!victim.isOnline()) {
+                        cancel();
+                        return;
+                    }
+                    if (time <= 0) {
+                        // 复活
+                        Location respawnLoc = victim.getBedSpawnLocation();
+                        if (respawnLoc == null) {
+                            World world = Bukkit.getWorld("world");
+                            respawnLoc = world != null ? world.getSpawnLocation() : victim.getLocation();
+                        }
+                        victim.teleport(respawnLoc);
+                        victim.setGameMode(GameMode.SURVIVAL);
+                        Compass.giveGameCompass(victim);
+                        victim.setHealth(20.0);
+                        victim.setFoodLevel(20);
+                        victim.setFireTicks(0);
+                        victim.setFallDistance(0F);
+                        victim.sendTitle("", "§a你已复活！", 10, 40, 10);
+                        victim.playSound(victim.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1F, 1F);
+                        cancel();
+                        return;
+                    }
+                    victim.sendTitle("§c你已死亡", "§e等待 " + time + " 秒复活", 0, 25, 0);
+                    time--;
+                }
+            }.runTaskTimer(plugin, 0L, 20L);
+
+            // 掉落物保持、火花等效果
+            Utils.spawnFireworkAtPlayer(victim, victimTeam.getColor());
+            event.setCancelled(true);
+            return;
+        }
+
         victim.setGameMode(GameMode.SPECTATOR);
+        // 逃生者或其他模式：从队伍移除并标记死亡
         victimTeam.removePlayer(victim);
         TeamsManager.setDead(victim, victimTeam);
         Utils.spawnFireworkAtPlayer(victim, victimTeam.getColor());
@@ -157,11 +221,11 @@ public class ListenerDeath implements Listener {
             Team targetTeam = victimTeam.isEmpty() ? victimTeam.getOpponent() : victimTeam;
             if (targetTeam != null && !targetTeam.isEmpty()) {
                 Teleport.teleportToRandomTeamPlayer(victim, targetTeam);
-                victim.sendMessage("§7你已死亡，正在传送至随机玩家身边...");
             }
         }, 20L); // Delay teleport slightly
 
         if (victimTeam.isEmpty()) {
+            Game.setEndLocation(deathLocation.clone());
             Game.endGame(victimTeam.getOpponent());
         }
     }
@@ -179,6 +243,9 @@ public class ListenerDeath implements Listener {
             }
             event.getDrops().add(customNetherStar);
         } else if (entityType == EntityType.ENDER_DRAGON) {
+            // 记录末影龙死亡地点，供 Game.endGame() 传送使用
+            Game.setEndLocation(event.getEntity().getLocation());
+
             if (Mode.getCurrentMode() == Mode.GameMode.MANHUNT) {
                 Team runnerTeam = TeamsManager.getTeamByName("逃生者");
                 if (runnerTeam != null) {

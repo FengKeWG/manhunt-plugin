@@ -16,11 +16,11 @@ import org.windguest.manhunt.game.Compass;
 import org.windguest.manhunt.game.Game;
 import org.windguest.manhunt.game.Mode;
 import org.windguest.manhunt.game.Teleport;
+import org.windguest.manhunt.menus.ManhuntJoinMenu;
 import org.windguest.manhunt.menus.PlaySelectionMenu;
 import org.windguest.manhunt.menus.RulesMenu;
 import org.windguest.manhunt.teams.Team;
 import org.windguest.manhunt.teams.TeamsManager;
-import org.windguest.manhunt.menus.ManhuntJoinMenu;
 
 public class ListenerJoin implements Listener {
     private static final Main plugin = Main.getInstance();
@@ -32,7 +32,12 @@ public class ListenerJoin implements Listener {
         DataManager.createPlayerFileIfNotExists(player);
         event.joinMessage(Component.text("[+] ", NamedTextColor.GREEN)
                 .append(Component.text(playerName, NamedTextColor.GREEN)));
-        if (Game.getCurrentState() == Game.GameState.WAITING) {
+        if (Game.getCurrentState() == Game.GameState.WAITING
+                || Game.getCurrentState() == Game.GameState.COUNTDOWN_STARTED) {
+            if (org.windguest.manhunt.world.ChunkyManager.isMaintenanceWindow()) {
+                player.kickPlayer("服务器凌晨地图预生成中，请 07:00 后再加入！");
+                return;
+            }
             Bukkit.getScheduler().runTaskLater(plugin, () -> RulesMenu.open(player), 20L);
             World hub = Bukkit.getWorld("hub");
             if (hub != null) {
@@ -42,7 +47,7 @@ public class ListenerJoin implements Listener {
                 Compass.giveHubCompass(player);
                 player.setInvulnerable(true);
             }
-            if (Bukkit.getOnlinePlayers().size() >= 2) {
+            if (Game.getCurrentState() == Game.GameState.WAITING && Bukkit.getOnlinePlayers().size() >= 2) {
                 Game.startWaitingCountdown();
                 Mode.startVoting();
             }
@@ -55,6 +60,28 @@ public class ListenerJoin implements Listener {
                 player.setGameMode(GameMode.ADVENTURE);
                 player.setInvulnerable(true);
                 Teleport.teleportToRandomTeamPlayer(player, quitTeam);
+                return;
+            }
+
+            // 新玩家首次加入，提供观战/加入菜单
+            player.setInvisible(true);
+            player.setInvulnerable(true);
+            if (Mode.getCurrentMode() == Mode.GameMode.TEAM || Mode.getCurrentMode() == Mode.GameMode.END) {
+                Bukkit.getScheduler().runTaskLater(plugin, () -> PlaySelectionMenu.open(player), 5L);
+            } else if (Mode.getCurrentMode() == Mode.GameMode.MANHUNT) {
+                Team hunterTeam = TeamsManager.getTeamByName("猎杀者");
+                Team runnerTeam = TeamsManager.getTeamByName("逃生者");
+                if (hunterTeam != null && runnerTeam != null) {
+                    int hunterCount = hunterTeam.getPlayerCount();
+                    int runnerCount = runnerTeam.getPlayerCount();
+                    if (runnerCount == 0) {
+                        Bukkit.getScheduler().runTaskLater(plugin, () -> ManhuntJoinMenu.open(player, "逃生者"), 5L);
+                    } else {
+                        double ratio = (double) hunterCount / runnerCount;
+                        String suggestion = (ratio > 2.0) ? "逃生者" : "猎杀者";
+                        Bukkit.getScheduler().runTaskLater(plugin, () -> ManhuntJoinMenu.open(player, suggestion), 5L);
+                    }
+                }
             }
         } else if (Game.getCurrentState() == Game.GameState.RUNNING) {
             Team quitTeam = TeamsManager.getQuitTeam(player);

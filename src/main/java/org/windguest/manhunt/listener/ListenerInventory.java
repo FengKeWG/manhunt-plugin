@@ -4,7 +4,9 @@ import org.bukkit.*;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.inventory.*;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
@@ -12,21 +14,18 @@ import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.windguest.manhunt.Main;
+import org.windguest.manhunt.game.Compass;
 import org.windguest.manhunt.game.Game;
 import org.windguest.manhunt.game.Mode;
+import org.windguest.manhunt.game.Teleport;
 import org.windguest.manhunt.jobs.Job;
 import org.windguest.manhunt.jobs.JobsManager;
-import org.windguest.manhunt.utils.Utils;
 import org.windguest.manhunt.menus.RulesMenu;
 import org.windguest.manhunt.menus.TeleportMenu;
 import org.windguest.manhunt.teams.Team;
 import org.windguest.manhunt.teams.TeamsManager;
-import org.windguest.manhunt.game.Teleport;
-import org.windguest.manhunt.game.Compass;
-// import org.windguest.manhunt.placeholder.PAPI; // Temporarily comment out
+import org.windguest.manhunt.utils.Utils;
 
-import java.util.MissingFormatWidthException;
-import java.util.Random;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -51,12 +50,17 @@ public class ListenerInventory implements Listener {
         if (event.getView().getTitle().equals("游戏模式投票")) {
             if (itemType == Material.DRAGON_EGG) {
                 Mode.setPreference(player, Mode.GameMode.MANHUNT);
-                Bukkit.broadcastMessage("§c[🏹] " + player.getName() + " 希望成为猎杀者");
+                Bukkit.broadcastMessage("§a[✔] " + player.getName() + " 投给了 §a追杀模式");
             } else if (itemType == Material.CHEST) {
                 Mode.setPreference(player, Mode.GameMode.TEAM);
+                Bukkit.broadcastMessage("§a[✔] " + player.getName() + " 投给了 §b团队模式");
             } else if (itemType == Material.ENDER_EYE) {
-                Mode.setPreference(player, Mode.GameMode.END);
+                // Mode.setPreference(player, Mode.GameMode.END);
+                player.sendMessage("§c[❌] 暂未开放！");
             }
+            player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_YES, 1.0f, 1.0f);
+            player.closeInventory();
+            event.setCancelled(true);
         }
         if (event.getView().getTitle().equals("选择职业")) {
             event.setCancelled(true);
@@ -67,7 +71,9 @@ public class ListenerInventory implements Listener {
                 if (selectedJob != null) {
                     JobsManager.setChosenJob(player, selectedJob);
                     selectedJob.giveKit(player);
-                    Bukkit.broadcastMessage(("§a[✔] " + player.getName() + " 选择了职业：" + selectedJob.getDisplayName()));
+                    Team pTeam = TeamsManager.getPlayerTeam(player);
+                    Bukkit.broadcastMessage((pTeam.getColorString() + "[" + pTeam.getIcon() + "] " + player.getName()
+                            + " 选择了职业：" + selectedJob.getDisplayName()));
 
                     // Remove job compass
                     for (ItemStack item : player.getInventory().getContents()) {
@@ -137,19 +143,15 @@ public class ListenerInventory implements Listener {
                 if (target != null && target.isOnline()) {
                     Player targetPlayer = target.getPlayer();
                     int cost = 19;
-                    if (TeamsManager.areSameTeam(player, targetPlayer)) {
-                        player.setMetadata("teleporting", new FixedMetadataValue(plugin, true));
-                        Teleport.startTeleportCountdown(player, targetPlayer, cost);
-                        player.closeInventory();
-                    }
+                    Teleport.startTeleportCountdown(player, targetPlayer, cost);
+                    player.closeInventory();
                 }
             }
         } else if (clickedItem.getType() == Material.BARRIER) {
             player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.3f, 1.0f);
             player.closeInventory();
         } else if (clickedItem.getType() == Material.ARROW) {
-            int currentPage = player.hasMetadata("teleport_page")
-                    ? player.getMetadata("teleport_page").get(0).asInt()
+            int currentPage = player.hasMetadata("teleport_page") ? player.getMetadata("teleport_page").get(0).asInt()
                     : 0;
             if (clickedItem.getItemMeta().getDisplayName().equals("§e上一页")) {
                 player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.3f, 1.0f);
@@ -158,10 +160,9 @@ public class ListenerInventory implements Listener {
                 player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.3f, 1.0f);
                 TeleportMenu.open(player, currentPage + 1);
             }
-        } else if (clickedItem.getType() == Material.CRAFTING_TABLE) {
-            player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.3f, 1.0f);
-            RulesMenu.open(player);
-        } else if (event.getView().getTitle().startsWith("游戏规则")) {
+        }
+        // 移除默认工作台点击触发，改为仅在传送菜单中处理
+        else if (event.getView().getTitle().startsWith("游戏规则")) {
             clickedItem = event.getCurrentItem();
             event.setCancelled(true);
             if (clickedItem != null && clickedItem.getType() == Material.BARRIER) {
@@ -178,9 +179,19 @@ public class ListenerInventory implements Listener {
             if (itemType == Material.TOTEM_OF_UNDYING) { // Join Runner
                 player.sendMessage("§a[✔] 你加入了逃生者阵营！");
                 runnerTeam.addPlayer(player);
+                player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 2, 60));
+                player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 4, 120));
+                player.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 4, 120));
+                player.addPotionEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE, 4, 120));
+                player.addPotionEffect(new PotionEffect(PotionEffectType.WATER_BREATHING, 4, 120));
             } else if (itemType == Material.IRON_SWORD) { // Join Hunter
                 player.sendMessage("§c[🏹] 你加入了猎人阵营！");
                 hunterTeam.addPlayer(player);
+                player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 2, 600));
+                player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 4, 1200));
+                player.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 4, 1200));
+                player.addPotionEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE, 4, 1200));
+                player.addPotionEffect(new PotionEffect(PotionEffectType.WATER_BREATHING, 4, 1200));
             } else if (itemType == Material.ENDER_EYE) { // Spectator
                 player.sendMessage("§7[🚫] 你选择了作为旁观者观战");
                 spectators.add(player);
@@ -203,6 +214,12 @@ public class ListenerInventory implements Listener {
                 player.setInvulnerable(false);
                 player.setGameMode(GameMode.SURVIVAL);
                 Compass.giveGameCompass(player);
+
+                // 立即传送到随机队友附近，增强游戏体验
+                Team joinTeam = TeamsManager.getPlayerTeam(player);
+                if (joinTeam != null) {
+                    Teleport.teleportToRandomTeamPlayer(player, joinTeam);
+                }
             }
             // PAPI.updatePlayerConfig(player, "games"); // Temporarily comment out
             player.closeInventory();
@@ -217,13 +234,17 @@ public class ListenerInventory implements Listener {
 
                 boolean joinRed = red.getPlayerCount() <= blue.getPlayerCount();
                 if (joinRed) {
-                    player.sendMessage("§c[🏹] 你加入了红队继续游戏！");
+                    player.sendMessage("§c[🎈] 你加入了红队继续游戏！");
                     red.addPlayer(player);
                 } else {
-                    player.sendMessage("§9[⚔] 你加入了蓝队继续游戏！");
+                    player.sendMessage("§9[🎯] 你加入了蓝队继续游戏！");
                     blue.addPlayer(player);
                 }
-
+                player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 2, 600));
+                player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 4, 1200));
+                player.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 4, 1200));
+                player.addPotionEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE, 4, 1200));
+                player.addPotionEffect(new PotionEffect(PotionEffectType.WATER_BREATHING, 4, 1200));
                 player.getInventory().remove(Material.COMPASS);
                 if (Game.getCurrentState() == Game.GameState.FROZEN) {
                     player.setInvisible(true);
@@ -251,28 +272,47 @@ public class ListenerInventory implements Listener {
             Material type = itemType;
             if (type == Material.RED_WOOL) {
                 TeamsManager.setTeamPreference(player, TeamsManager.TeamPreference.RED);
-                Bukkit.broadcastMessage("§c[红队] " + player.getName() + " 倾向加入红队");
+                Bukkit.broadcastMessage("§c[🎈] " + player.getName() + " 倾向加入红队");
             } else if (type == Material.BLUE_WOOL) {
                 TeamsManager.setTeamPreference(player, TeamsManager.TeamPreference.BLUE);
-                Bukkit.broadcastMessage("§9[蓝队] " + player.getName() + " 倾向加入蓝队");
+                Bukkit.broadcastMessage("§9[🎯] " + player.getName() + " 倾向加入蓝队");
             } else if (type == Material.TOTEM_OF_UNDYING) {
                 TeamsManager.setTeamPreference(player, TeamsManager.TeamPreference.RUNNER);
-                Bukkit.broadcastMessage("§a[逃生者] " + player.getName() + " 倾向成为逃生者");
+                Bukkit.broadcastMessage("§a[🐉] " + player.getName() + " 倾向成为逃生者");
             } else if (type == Material.IRON_SWORD) {
                 TeamsManager.setTeamPreference(player, TeamsManager.TeamPreference.HUNTER);
-                Bukkit.broadcastMessage("§c[猎杀者] " + player.getName() + " 倾向成为猎杀者");
+                Bukkit.broadcastMessage("§c[🏹] " + player.getName() + " 倾向成为猎杀者");
             }
+            player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_YES, 1.0f, 1.0f);
+            player.closeInventory();
             event.setCancelled(true);
             return;
         }
 
+        // 允许在背包格子间移动特殊指南针，但禁止把它丢出背包（Q/拖到空白处）或放进共享背包
         if (clickedItem != null && clickedItem.getType() == Material.COMPASS && clickedItem.hasItemMeta()) {
-            if (clickedItem.getItemMeta().getPersistentDataContainer().has(new NamespacedKey(plugin, "hub_compass"))
+            boolean isSpecial = clickedItem.getItemMeta().getPersistentDataContainer()
+                    .has(new NamespacedKey(plugin, "hub_compass"))
                     || clickedItem.getItemMeta().getPersistentDataContainer()
                             .has(new NamespacedKey(plugin, "job_compass"))
                     || clickedItem.getItemMeta().getPersistentDataContainer()
-                            .has(new NamespacedKey(plugin, "game_compass"))) {
-                event.setCancelled(true);
+                            .has(new NamespacedKey(plugin, "game_compass"));
+            if (isSpecial) {
+                // 丢弃或点击背包外部
+                switch (event.getAction()) {
+                    case DROP_ALL_CURSOR:
+                    case DROP_ONE_CURSOR:
+                    case DROP_ALL_SLOT:
+                    case DROP_ONE_SLOT:
+                        event.setCancelled(true);
+                        return;
+                    default:
+                        // 其他动作允许（移动、交换等）
+                        break;
+                }
+                if (event.getClickedInventory() == null) { // 点击背包外部
+                    event.setCancelled(true);
+                }
             }
         }
 
@@ -302,8 +342,7 @@ public class ListenerInventory implements Listener {
         }
 
         String title = event.getView().getTitle();
-        if (title.contains("中途加入") && TeamsManager.getPlayerTeam(player) == null
-                && !spectators.contains(player)) {
+        if (title.contains("中途加入") && TeamsManager.getPlayerTeam(player) == null && !spectators.contains(player)) {
             Bukkit.getScheduler().runTaskLater(plugin, () -> player.openInventory(event.getInventory()), 5L);
         }
     }

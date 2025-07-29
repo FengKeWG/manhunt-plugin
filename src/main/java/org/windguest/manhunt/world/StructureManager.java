@@ -17,6 +17,16 @@ public class StructureManager {
     private static final Map<StructureType, Set<Location>> nearestStructureCache = new ConcurrentHashMap<>();
     private static final Map<StructureType, Map<Player, Location>> playerNearestStructure = new ConcurrentHashMap<>();
 
+    // 新增：初始化缓存并预加载要塞位置
+    public static void init() {
+        // 初始化两个缓存 Map
+        for (StructureType type : StructureType.getStructureTypes().values()) {
+            nearestStructureCache.putIfAbsent(type, ConcurrentHashMap.newKeySet());
+            playerNearestStructure.putIfAbsent(type, new ConcurrentHashMap<>());
+        }
+        // 取消预加载要塞位置，避免启动延迟
+    }
+
     private static List<Location> generatePredefinedLocations(World world) {
         List<Location> locations = new ArrayList<>();
         Location spawnLocation = WorldManager.getSpawnLocation();
@@ -57,7 +67,8 @@ public class StructureManager {
         if (cachedStructureLocation != null) {
             playerCache.put(player, cachedStructureLocation);
         } else {
-            Location foundStructure = player.getWorld().locateNearestStructure(playerLocation, structureType, 100, false);
+            Location foundStructure = player.getWorld().locateNearestStructure(playerLocation, structureType, 100,
+                    false);
             if (foundStructure != null) {
                 sharedCache.add(foundStructure);
                 playerCache.put(player, foundStructure);
@@ -96,6 +107,14 @@ public class StructureManager {
         return deltaX * deltaX + deltaZ * deltaZ;
     }
 
+    public static Location getNearestStructure(StructureType type, Player player) {
+        Map<Player, Location> playerMap = playerNearestStructure.get(type);
+        if (playerMap != null) {
+            return playerMap.get(player);
+        }
+        return null;
+    }
+
     private void initializeCaches() {
         for (StructureType type : StructureType.getStructureTypes().values()) {
             nearestStructureCache.put(type, new HashSet<>());
@@ -115,28 +134,20 @@ public class StructureManager {
                 List<Location> generatedLocations = generatePredefinedLocations(overworld);
                 for (Location loc : generatedLocations) {
                     Location searchLocation = loc.clone();
-                    Location foundStructure = overworld.locateNearestStructure(
-                            searchLocation,
-                            StructureType.STRONGHOLD,
-                            1500,
-                            false
-                    );
+                    Location foundStructure = overworld.locateNearestStructure(searchLocation, StructureType.STRONGHOLD,
+                            1500, false);
                     if (foundStructure != null) {
                         nearestStructureCache.get(StructureType.STRONGHOLD).add(foundStructure);
                         getLogger().info(String.format("已缓存要塞位置：查找位置 (%.0f, %.0f, %.0f) -> 要塞位置 (%.0f, %.0f, %.0f)",
                                 searchLocation.getX(), searchLocation.getY(), searchLocation.getZ(),
                                 foundStructure.getX(), foundStructure.getY(), foundStructure.getZ()));
                     } else {
-                        getLogger().warning(String.format("在位置 (%.0f, %.0f, %.0f) 未找到要塞。",
-                                searchLocation.getX(), searchLocation.getY(), searchLocation.getZ()));
+                        getLogger().warning(String.format("在位置 (%.0f, %.0f, %.0f) 未找到要塞。", searchLocation.getX(),
+                                searchLocation.getY(), searchLocation.getZ()));
                     }
                 }
                 getLogger().info("预先查找要塞并缓存完成。");
             }
         }.runTask(plugin);
-    }
-
-    public Location getNearestStructure(StructureType type, Player player) {
-        return playerNearestStructure.get(type).get(player);
     }
 }

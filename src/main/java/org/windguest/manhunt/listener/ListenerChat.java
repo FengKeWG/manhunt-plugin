@@ -17,9 +17,20 @@ public class ListenerChat implements Listener {
     public void onPlayerChat(AsyncPlayerChatEvent event) {
         Player sender = event.getPlayer();
         Team team = TeamsManager.getPlayerTeam(sender);
-        String playerIcon = team.getIcon();
         String message = event.getMessage();
-        event.setFormat(playerIcon + " " + sender.getName() + "§f: " + message);
+
+        String prefix;
+        if (team == null) { // 旁观者
+            prefix = "§7🚫";
+            event.setFormat(prefix + " " + sender.getName() + "§f: " + message);
+            // 旁观者消息全员可见
+            return;
+        }
+
+        prefix = team.getColorString() + team.getIcon();
+        event.setFormat(prefix + " " + sender.getName() + "§f: " + message);
+
+        // 队伍聊天：屏蔽敌对队伍
         Set<Player> recipients = new HashSet<>(Bukkit.getOnlinePlayers());
         recipients.removeAll(team.getOpponent().getPlayers());
         event.getRecipients().clear();

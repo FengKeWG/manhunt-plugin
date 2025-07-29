@@ -26,8 +26,7 @@ public class ShoutCommand implements CommandExecutor {
             return true;
         }
         String message = String.join(" ", args);
-        String playerIcon = team.getIcon();
-        String formattedMessage = ChatColor.YELLOW + "[喊话] " + playerIcon + " " + player.getName() + ChatColor.WHITE + ": " + message;
+        String formattedMessage = ChatColor.YELLOW + "[喊话] " + team.getColorString() + team.getIcon() + " " + player.getName() + ChatColor.WHITE + ": " + message;
         Bukkit.broadcastMessage(formattedMessage);
         return true;
     }

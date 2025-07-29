@@ -6,8 +6,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArraySet;
 
 public class Team {
     Color color;
@@ -15,7 +15,7 @@ public class Team {
     private Inventory sharedChest;
     private String name;
     private double dragonDamage;
-    private Set<Player> players;
+    private Set<Player> players = new CopyOnWriteArraySet<>();
     private String colorString;
     private String icon;
     private boolean endPortalOpened;
@@ -25,7 +25,6 @@ public class Team {
         this.colorString = colorString;
         this.icon = icon;
         this.color = color;
-        this.players = new HashSet<>();
         this.dragonDamage = 0;
         this.endPortalOpened = false;
         this.opponent = null;
@@ -45,7 +44,7 @@ public class Team {
     }
 
     public void sendBackMessage(Player player) {
-        String message = colorString + "[" + icon + "] " + name + "获胜！";
+        String message = colorString + "[" + icon + "] 你已恢复" + name + "！";
         player.sendMessage(message);
     }
 
@@ -60,6 +59,10 @@ public class Team {
 
     public String getName() {
         return name;
+    }
+
+    public String getDisplayName() {
+        return this.colorString + this.name;
     }
 
     public double getDragonDamage() {
