@@ -1,0 +1,11 @@
+name: ManHunt
+version: '${project.version}'
+main: org.windguest.manhunt.Main
+api-version: '1.21'
+author: WindGuest
+softdepend: [Chunky]
+commands:
+  s:
+    description: 全局喊话
+    usage: /<command> <消息>
+    aliases: [shout]
