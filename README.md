@@ -1,6 +1,6 @@
 # manhunt-plugin
-WindCraft 猎人游戏插件
-**Java 21, Minecraft 1.21.7**
+- WindCraft 猎人游戏插件
+- **Java 21, Minecraft 1.21.7**
 
 ---
 
