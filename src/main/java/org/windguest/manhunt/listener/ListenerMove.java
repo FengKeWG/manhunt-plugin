@@ -16,7 +16,6 @@ public class ListenerMove implements Listener {
         if (player.getInventory().getChestplate() != null && player.getInventory().getChestplate().getType() == Material.ELYTRA) {
             player.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 40, 0, true, false));
             player.addPotionEffect(new PotionEffect(PotionEffectType.HUNGER, 40, 9, true, false));
-            player.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 40, 0, true, false));
         }
         if (player.getWorld() == Bukkit.getWorld("hub") && player.getY() < 70.0) {
             World hub = Bukkit.getWorld("hub");
