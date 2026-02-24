@@ -10,6 +10,7 @@ import org.windguest.manhunt.Main;
 import org.windguest.manhunt.teams.Team;
 import org.windguest.manhunt.teams.TeamsManager;
 import org.windguest.manhunt.utils.Utils;
+import org.windguest.manhunt.world.EndLocationManager;
 import org.windguest.manhunt.world.WorldManager;
 
 import java.util.Random;
@@ -21,6 +22,60 @@ public class Teleport {
     private static final int SPAWN_DISTANCE = 150;
 
     public static void teleportPlayersToTeamBases() {
+        if (Mode.getCurrentMode() == Mode.GameMode.END) {
+            // 1. 开启所有队伍的末地门
+            for (Team team : TeamsManager.getTeams()) {
+                team.setEndPortalOpened(true);
+            }
+
+            // 2. 获取预先生成的基地位置
+            Location redBase = EndLocationManager.getRedEndBase();
+            Location blueBase = EndLocationManager.getBlueEndBase();
+            if (redBase == null || blueBase == null) {
+                plugin.getLogger().severe("末地基地位置缺失，回退到旧传送逻辑！");
+                for (Player player : Bukkit.getOnlinePlayers()) {
+                    player.getInventory().clear();
+                    Team t = TeamsManager.getPlayerTeam(player);
+                    if (t == null) continue;
+                    Utils.teleportToEnd(player);
+                }
+                return;
+            }
+
+            // 3. 创建玻璃
+            World endWorld = redBase.getWorld();
+            if (endWorld != null) {
+                int cubeHeight = 5;
+                int cubeSize = 5;
+                double centerY = redBase.getY() + (cubeHeight - 1) / 2.0; // 240 + 2 = 242
+
+                Location redCenter = redBase.clone();
+                redCenter.setY(centerY);
+                Location blueCenter = blueBase.clone();
+                blueCenter.setY(centerY);
+
+                WorldManager.createHollowGlassCube(redCenter, cubeSize, cubeHeight);
+                WorldManager.createHollowGlassCube(blueCenter, cubeSize, cubeHeight);
+            }
+
+            // 4. 传送玩家并立即给予漂浮效果
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                player.getInventory().clear();
+                Team playerTeam = TeamsManager.getPlayerTeam(player);
+                if (playerTeam == null) continue;
+
+                if ("红队".equals(playerTeam.getName())) {
+                    player.teleport(redBase);
+                } else if ("蓝队".equals(playerTeam.getName())) {
+                    player.teleport(blueBase);
+                } else {
+                    Utils.teleportToEnd(player);
+                }
+                Utils.endDown(player); // 防虚空漂浮
+            }
+            return;
+        }
+
         World world = Bukkit.getWorld("world");
         Location location = WorldManager.getSpawnLocation();
         int redX = location.getBlockX() + SPAWN_DISTANCE / 2;
@@ -59,8 +114,6 @@ public class Teleport {
             if (playerTeam == null)
                 continue;
 
-            // updatePlayerConfig(player, "games");
-
             if (playerTeam.equals(team1)) {
                 int y = world.getHighestBlockYAt(coordinates[0][0], coordinates[0][1]) - 3;
                 Location teleportLocation = new Location(world, coordinates[0][0], y, coordinates[0][1]);
@@ -74,14 +127,12 @@ public class Teleport {
     }
 
     public static void teleportToRandomTeamPlayer(Player player, Team team) {
-
         Set<Player> src;
         if (team != null) {
             src = team.getPlayers();
         } else {
             src = TeamsManager.getAllGamingPlayers();
         }
-        // 复制到可修改集合，避免对不可修改集合调用 remove
         Set<Player> candidates = new java.util.HashSet<>(src);
         candidates.remove(player);
         if (candidates.isEmpty()) {
@@ -94,13 +145,11 @@ public class Teleport {
     }
 
     public static void startTeleportCountdown(Player player, Player targetPlayer, int cost) {
-        // 开局前 5 分钟禁止传送
         if (org.windguest.manhunt.game.Game.getGameElapsedTime() < 300) {
             player.sendMessage("§c[❌] 游戏开始 5 分钟内无法传送！");
             player.playSound(player.getLocation(), org.bukkit.Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f);
             return;
         }
-        // 标记正在倒计时
         player.setMetadata("teleporting", new org.bukkit.metadata.FixedMetadataValue(plugin, true));
         player.closeInventory();
         new BukkitRunnable() {
@@ -208,7 +257,7 @@ public class Teleport {
                                 + " §7附近100格的随机位置"));
             }
         } else {
-            player.sendMessage("§c[❌] 传送失败，未知原因！");
+            player.sendMessage("§c[❌] 传送失败，棍母原因！");
             player.removeMetadata("teleporting", plugin);
         }
     }

@@ -4,8 +4,23 @@ main: org.windguest.manhunt.Main
 api-version: '1.21'
 author: WindGuest
 softdepend: [Chunky]
+
 commands:
   s:
     description: 全局喊话
     usage: /<command> <消息>
     aliases: [shout]
+  manhunt:
+    description: 主命令 - 打开模式菜单或管理游戏
+    usage: /<command> [choose|chaosend|start|stop|vote|help]
+    aliases: [mh, hunt]
+    permission: manhunt.use
+    permission-message: 你没有权限使用这个命令！
+
+permissions:
+  manhunt.use:
+    description: 允许使用基础命令
+    default: true
+  manhunt.admin:
+    description: 允许管理员命令（包括构建混沌末地数据包）
+    default: op

@@ -32,3 +32,4 @@ public class ShoutCommand implements CommandExecutor {
     }
 
 }
+

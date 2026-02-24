@@ -1,0 +1,5 @@
+# config.yml
+# ManHunt 插件配置文件
+
+# 当前游戏模式 (MANHUNT, TEAM, END, 或 null)
+current-mode: "null"

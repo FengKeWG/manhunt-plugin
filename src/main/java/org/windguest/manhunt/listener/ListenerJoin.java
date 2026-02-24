@@ -32,13 +32,24 @@ public class ListenerJoin implements Listener {
         DataManager.createPlayerFileIfNotExists(player);
         event.joinMessage(Component.text("[+] ", NamedTextColor.GREEN)
                 .append(Component.text(playerName, NamedTextColor.GREEN)));
-        if (Game.getCurrentState() == Game.GameState.WAITING
-                || Game.getCurrentState() == Game.GameState.COUNTDOWN_STARTED) {
+        
+        // 检查当前游戏状态
+        Game.GameState gameState = Game.getCurrentState();
+        
+        // 玩家加入时检查是否可以开始相应阶段
+        int playerCount = Bukkit.getOnlinePlayers().size();
+        
+        if (gameState == Game.GameState.WAITING || gameState == Game.GameState.COUNTDOWN_STARTED) {
+            // 检查维护窗口
             if (org.windguest.manhunt.world.ChunkyManager.isMaintenanceWindow()) {
                 player.kickPlayer("服务器凌晨地图预生成中，请 07:00 后再加入！");
                 return;
             }
+            
+            // 打开规则菜单
             Bukkit.getScheduler().runTaskLater(plugin, () -> RulesMenu.open(player), 20L);
+            
+            // 传送到hub
             World hub = Bukkit.getWorld("hub");
             if (hub != null) {
                 Location hubLocation = new Location(hub, 0.5, 81.0, 0.5);
@@ -47,11 +58,33 @@ public class ListenerJoin implements Listener {
                 Compass.giveHubCompass(player);
                 player.setInvulnerable(true);
             }
-            if (Game.getCurrentState() == Game.GameState.WAITING && Bukkit.getOnlinePlayers().size() >= 2) {
-                Game.startWaitingCountdown();
-                Mode.startVoting();
+            
+            // 玩家数量达到2人时，根据模式启动相应流程
+            if (playerCount >= 2) {
+                Mode.GameMode currentMode = Mode.getCurrentMode();
+                
+                if (currentMode == Mode.GameMode.END) {
+                    // END模式：检查是否已经在等待倒计时中
+                    if (!Game.isWaitingStarted()) {
+                        Bukkit.broadcastMessage("§d[🌌] 混沌末地模式已激活，开始60秒等待阶段！");
+                        Game.startWaitingCountdown();
+                    }
+                } else if (currentMode == null) {
+                    // 模式未定：检查是否已经在投票中
+                    if (!Mode.isVoting()) {
+                        Bukkit.broadcastMessage("§6[!] 游戏模式未设置，开始60秒投票选择模式！");
+                        Mode.startVoting();
+                    }
+                } else {
+                    // MANHUNT/TEAM模式：检查是否已经在等待倒计时中
+                    if (!Game.isWaitingStarted()) {
+                        Bukkit.broadcastMessage("§6[!] 游戏模式已确定，开始60秒等待阶段！");
+                        Game.startWaitingCountdown();
+                    }
+                }
             }
-        } else if (Game.getCurrentState() == Game.GameState.FROZEN) {
+        } else if (gameState == Game.GameState.FROZEN) {
+            // 掉线重连处理
             Team quitTeam = TeamsManager.getQuitTeam(player);
             if (quitTeam != null) {
                 quitTeam.addPlayer(player);
@@ -83,7 +116,7 @@ public class ListenerJoin implements Listener {
                     }
                 }
             }
-        } else if (Game.getCurrentState() == Game.GameState.RUNNING) {
+        } else if (gameState == Game.GameState.RUNNING) {
             Team quitTeam = TeamsManager.getQuitTeam(player);
             if (quitTeam != null) {
                 quitTeam.addPlayer(player);

@@ -61,7 +61,7 @@ public class Compass {
     public static void updateCompass() {
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (TeamsManager.getPlayerTeam(player) == null) {
-                continue; // 旁观者不显示 ActionBar
+                continue;
             }
             Player nearestEnemy = findNearestEnemy(player);
             if (nearestEnemy != null) {

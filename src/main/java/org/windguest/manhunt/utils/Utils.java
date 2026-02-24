@@ -118,4 +118,35 @@ public class Utils {
         task.runTaskTimer(plugin, 0L, 20L);
         Bukkit.getScheduler().runTaskLater(plugin, task::cancel, 2400L);
     }
+
+    // 新增的 teleportToEnd 方法
+    public static void teleportToEnd(Player player) {
+        World endWorld = Bukkit.getWorld("world_the_end");
+        if (endWorld == null) {
+            player.sendMessage("§c[❌] 末地世界未加载！");
+            return;
+        }
+        
+        // 生成主岛半径5000格外的随机位置
+        double angle = rand.nextDouble() * 2.0 * Math.PI;
+        double radius = 5000 + rand.nextDouble() * 1000; // 5000-6000格范围
+        double x = radius * Math.cos(angle);
+        double z = radius * Math.sin(angle);
+        
+        // 获取该位置的地面高度
+        Location targetLocation = new Location(endWorld, x, 0, z);
+        int highestY = endWorld.getHighestBlockYAt((int) x, (int) z);
+        targetLocation.setY(highestY + 1.0);
+        
+        // 传送玩家并给予效果
+        player.teleport(targetLocation);
+        endDown(player);
+        player.playSound(player.getLocation(), Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 1.0f);
+        
+        // 给予短暂的保护效果
+        player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 100, 4));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE, 200, 0));
+        
+        player.sendMessage("§d[🌌] 你已被传送到末地外围！");
+    }
 }
